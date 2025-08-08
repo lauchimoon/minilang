@@ -1,0 +1,2 @@
+mov s0 "hola mundo"
+prntl s0
