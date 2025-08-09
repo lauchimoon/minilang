@@ -21,7 +21,9 @@ typedef enum {
 
 #define MAX_REGISTERS 256
 #define MAX_ARGS        6
-char *sregisters[MAX_REGISTERS] = {};
+int    iregisters[MAX_REGISTERS] = {};
+double fregisters[MAX_REGISTERS] = {};
+char  *sregisters[MAX_REGISTERS] = {};
 
 #define BUFFER_SIZE 1024
 
@@ -198,7 +200,13 @@ int get_register_index(char *s)
 void mov(int target_reg, int reg, char *data)
 {
   switch (target_reg) {
-    case 'i': case 'f':
+    case 'i':
+      int n = atoi(data);
+      iregisters[reg] = n;
+      break;
+    case 'f':
+      double f = atof(data);
+      fregisters[reg] = f;
       break;
     case 's':
       int datasize = strlen(data);
@@ -211,7 +219,11 @@ void mov(int target_reg, int reg, char *data)
 void prnt(int target_reg, int reg, int newline)
 {
   switch (target_reg) {
-    case 'i': case 'f':
+    case 'i':
+      printf("%d", iregisters[reg]);
+      break;
+    case 'f':
+      printf("%g", fregisters[reg]);
       break;
     case 's':
       printf("%s", sregisters[reg]);
