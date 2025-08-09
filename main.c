@@ -62,6 +62,7 @@ void parse_statements(statementlist sl);
 void fail(Error code);
 
 static statementnode *new_node(statement stmt, statementnode *next);
+static int is_empty(char *s);
 
 int main(int argc, char **argv)
 {
@@ -81,6 +82,8 @@ int main(int argc, char **argv)
   char line[BUFFER_SIZE] = { 0 };
   while (fgets(line, BUFFER_SIZE, f) != NULL) {
     line[strcspn(line, "\n")] = '\0';
+    if (is_empty(line))
+      continue;
 
     statement stmt = {};
     int ret = stmt_make_from_str(&stmt, line);
@@ -316,4 +319,13 @@ static statementnode *new_node(statement stmt, statementnode *next)
   statementnode *x = malloc(sizeof(statementnode));
   x->s = stmt; x->next = next;
   return x;
+}
+
+static int is_empty(char *s)
+{
+  for (int i = 0; s[i]; ++i)
+    if (!isspace(s[i]))
+      return 0;
+
+  return 1;
 }
