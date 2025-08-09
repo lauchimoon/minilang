@@ -1,0 +1,18 @@
+fib:
+  add2 i3 i1 i2
+
+  mov i1 i2
+  mov i2 i3
+
+  decr i0
+  jmpnz i0 fib
+end
+
+start:
+  mov i0 5
+  mov i1 0
+  mov i2 1
+
+  jmp fib
+  prntl i3
+end
