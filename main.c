@@ -24,6 +24,7 @@ typedef enum {
   ERROR_INVALID_REGISTER_TYPE,
   ERROR_INVALID_REGISTER_NUMBER,
   ERROR_INVALID_OPERATION,
+  ERROR_DIV_ZERO,
 } Error;
 
 #define MAX_REGISTERS 256
@@ -66,6 +67,7 @@ void clear(int target_reg, int reg);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
+statementlist sl_make_from_file(FILE *f);
 statementlist sl_append(statementlist sl, statement stmt);
 void parse_statements(statementlist sl);
 
@@ -88,23 +90,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  statementlist sl = sl_make();
-  char line[BUFFER_SIZE] = { 0 };
-  while (fgets(line, BUFFER_SIZE, f) != NULL) {
-    line[strcspn(line, "\n")] = '\0';
-    if (is_empty(line))
-      continue;
-
-    statement stmt = {};
-    int ret = stmt_make_from_str(&stmt, line);
-    if (ret != ERROR_NONE) {
-      fail(ret);
-      return 1;
-    }
-
-    sl = sl_append(sl, stmt);
-  }
-
+  statementlist sl = sl_make_from_file(f);
   parse_statements(sl);
 
   sl_free(sl);
@@ -297,11 +283,12 @@ void iarithm(int reg_dst, int reg_src, int op)
       iregisters[reg_dst] *= iregisters[reg_src];
       break;
     case OPCODE_DIV:
-      if (iregisters[reg_src] != 0)
-        iregisters[reg_dst] /= iregisters[reg_src];
+      if (iregisters[reg_src] == 0) {
+        fail(ERROR_DIV_ZERO);
+        return;
+      }
+      iregisters[reg_dst] /= iregisters[reg_src];
       break;
-    case OPCODE_INCR:
-      ++iregisters[reg_dst];
     default: break;
   }
 }
@@ -319,8 +306,11 @@ void farithm(int reg_dst, int reg_src, int op)
       fregisters[reg_dst] *= fregisters[reg_src];
       break;
     case OPCODE_DIV:
-      if (fregisters[reg_src] != 0)
-        fregisters[reg_dst] /= fregisters[reg_src];
+      if (fregisters[reg_src] == 0) {
+        fail(ERROR_DIV_ZERO);
+        return;
+      }
+      fregisters[reg_dst] /= fregisters[reg_src];
       break;
     default: break;
   }
@@ -365,6 +355,29 @@ void sl_free(statementlist sl)
 
     erase = sl;
   }
+}
+
+statementlist sl_make_from_file(FILE *f)
+{
+  statementlist sl = sl_make();
+
+  char line[BUFFER_SIZE] = { 0 };
+  while (fgets(line, BUFFER_SIZE, f) != NULL) {
+    line[strcspn(line, "\n")] = '\0';
+    if (is_empty(line))
+      continue;
+
+    statement stmt = {};
+    int ret = stmt_make_from_str(&stmt, line);
+    if (ret != ERROR_NONE) {
+      fail(ret);
+      return NULL;
+    }
+
+    sl = sl_append(sl, stmt);
+  }
+
+  return sl;
 }
 
 statementlist sl_append(statementlist sl, statement stmt)
