@@ -10,6 +10,7 @@ typedef enum {
   OPCODE_MOV = 0,
   OPCODE_PRNT,
   OPCODE_PRNTL,
+  OPCODE_ADD,
 } Opcode;
 
 typedef enum {
@@ -51,6 +52,7 @@ int get_register_index(char *s);
 
 void mov(int target_reg, int reg, char *data);
 void prnt(int target_reg, int reg, int newline);
+void add(int target_reg, int reg_dst, int reg_src);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -61,9 +63,14 @@ void fail(Error code);
 
 static statementnode *new_node(statement stmt, statementnode *next);
 
-int main()
+int main(int argc, char **argv)
 {
-  char *filename = "hello.mil";
+  if (argc < 2) {
+    printf("usage: %s <sourcefile>\n", PROGRAM_NAME);
+    return 1;
+  }
+
+  char *filename = argv[1];
   FILE *f = fopen(filename, "r");
   if (!f) {
     printf("%s: file '%s' doesn't exist\n", PROGRAM_NAME, filename);
@@ -88,7 +95,6 @@ int main()
   parse_statements(sl);
 
   sl_free(sl);
-  free(sregisters[0]);
   return 0;
 }
 
@@ -152,6 +158,7 @@ Opcode get_opcode_by_name(char *name)
   if (streq(name, "mov")) return OPCODE_MOV;
   else if (streq(name, "prnt")) return OPCODE_PRNT;
   else if (streq(name, "prntl")) return OPCODE_PRNTL;
+  else if (streq(name, "add")) return OPCODE_ADD;
   else return -1;
 }
 
@@ -173,6 +180,10 @@ int parse_statement(statement stmt)
     case OPCODE_PRNT: case OPCODE_PRNTL:
       int newline = (opcode == OPCODE_PRNTL)? 1 : 0;
       prnt(target_reg, reg, newline);
+      break;
+    case OPCODE_ADD:
+      int regsrc = get_register_index(stmt.args[1]);
+      add(target_reg, reg, regsrc);
       break;
     default: break;
   }
@@ -231,6 +242,19 @@ void prnt(int target_reg, int reg, int newline)
   }
 
   if (newline) printf("\n");
+}
+
+void add(int target_reg, int reg_dst, int reg_src)
+{
+  switch (target_reg) {
+    case 'i':
+      iregisters[reg_dst] = iregisters[reg_dst] + iregisters[reg_src];
+      break;
+    case 'f':
+      fregisters[reg_dst] = fregisters[reg_dst] + fregisters[reg_src];
+      break;
+    default: break;
+  }
 }
 
 statementlist sl_make(void)

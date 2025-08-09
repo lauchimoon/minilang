@@ -1,0 +1,6 @@
+mov i0 34
+mov i1 35
+add i0 i1
+prnt i0
+mov s0 " hehehe"
+prntl s0
