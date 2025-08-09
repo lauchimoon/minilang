@@ -1,0 +1,12 @@
+numbers:
+  prntl i1
+  incr i1
+  decr i0
+  jmpnz i0 numbers
+end
+
+start:
+  mov i0 10
+  mov i1 1
+  jmp numbers
+end

@@ -19,6 +19,7 @@ typedef enum {
   OPCODE_DECR,
   OPCODE_CLR,
   OPCODE_JMP,
+  OPCODE_JMPNZ,
 } Opcode;
 
 typedef enum {
@@ -83,6 +84,7 @@ int farithm(int reg_dst, int reg_src, int op);
 void incr(int target_reg, int reg, int sign);
 void clear(int target_reg, int reg);
 void jmp(program *pg, int labelidx);
+void jmpnz(program *pg, int target_reg, int reg, int labelidx);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -256,6 +258,7 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "decr")) return OPCODE_DECR;
   else if (streq(name, "clr")) return OPCODE_CLR;
   else if (streq(name, "jmp")) return OPCODE_JMP;
+  else if (streq(name, "jmpnz")) return OPCODE_JMPNZ;
   else return -1;
 }
 
@@ -278,16 +281,18 @@ int parse_statement(statement stmt)
     case OPCODE_MOV:
       mov(target_reg, reg, stmt.args[1]);
       break;
-    case OPCODE_PRNT: case OPCODE_PRNTL:
+    case OPCODE_PRNT: case OPCODE_PRNTL: {
       int newline = (opcode == OPCODE_PRNTL)? 1 : 0;
       prnt(target_reg, reg, newline);
+    }
       break;
     case OPCODE_ADD: case OPCODE_SUB:
-    case OPCODE_MUL: case OPCODE_DIV:
+    case OPCODE_MUL: case OPCODE_DIV: {
       int regsrc = get_register_index(stmt.args[1]);
       int ret = arithm(target_reg, reg, regsrc, opcode);
       if (ret != ERROR_NONE)
         return ret;
+    }
       break;
     case OPCODE_INCR:
     case OPCODE_DECR:
@@ -296,13 +301,23 @@ int parse_statement(statement stmt)
     case OPCODE_CLR:
       clear(target_reg, reg);
       break;
-    case OPCODE_JMP:
+    case OPCODE_JMP: {
       char *labelname = stmt.args[0];
       int labelidx = find_label(&pg, labelname);
       if (labelidx == -1)
         return ERROR_UNKNOWN_LABEL;
 
       jmp(&pg, labelidx);
+    }
+      break;
+    case OPCODE_JMPNZ: {
+      char *labelname = stmt.args[1];
+      int labelidx = find_label(&pg, labelname);
+      if (labelidx == -1)
+        return ERROR_UNKNOWN_LABEL;
+
+      jmpnz(&pg, target_reg, reg, labelidx);
+    }
       break;
     default: break;
   }
@@ -451,6 +466,16 @@ void jmp(program *pg, int labelidx)
 {
   label lb = pg->labels[labelidx];
   parse_statements(lb);
+}
+
+void jmpnz(program *pg, int target_reg, int reg, int labelidx)
+{
+  switch (target_reg) {
+    case 'i': if (iregisters[reg] != 0) jmp(pg, labelidx); break;
+    case 'f': if (fregisters[reg] != 0) jmp(pg, labelidx); break;
+    case 's': if (sregisters[reg]) jmp(pg, labelidx); break;
+    default: break;
+  }
 }
 
 statementlist sl_make(void)
