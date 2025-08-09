@@ -16,6 +16,7 @@ typedef enum {
   OPCODE_DIV,
   OPCODE_INCR,
   OPCODE_DECR,
+  OPCODE_CLR,
 } Opcode;
 
 typedef enum {
@@ -61,6 +62,7 @@ void arithm(int target_reg, int reg_dst, int reg_src, int op);
 void iarithm(int reg_dst, int reg_src, int op);
 void farithm(int reg_dst, int reg_src, int op);
 void incr(int target_reg, int reg, int sign);
+void clear(int target_reg, int reg);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -175,6 +177,7 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "div")) return OPCODE_DIV;
   else if (streq(name, "incr")) return OPCODE_INCR;
   else if (streq(name, "decr")) return OPCODE_DECR;
+  else if (streq(name, "clr")) return OPCODE_CLR;
   else return -1;
 }
 
@@ -205,6 +208,9 @@ int parse_statement(statement stmt)
     case OPCODE_INCR:
     case OPCODE_DECR:
       incr(target_reg, reg, (opcode == OPCODE_INCR)? 1 : -1);
+      break;
+    case OPCODE_CLR:
+      clear(target_reg, reg);
       break;
     default: break;
   }
@@ -325,6 +331,19 @@ void incr(int target_reg, int reg, int sign)
   switch (target_reg) {
     case 'i': iregisters[reg] += sign; break;
     case 'f': fregisters[reg] += sign; break;
+    default: break;
+  }
+}
+
+void clear(int target_reg, int reg)
+{
+  switch (target_reg) {
+    case 'i': iregisters[reg] = 0; break;
+    case 'f': fregisters[reg] = 0.0; break;
+    case 's':
+      free(sregisters[reg]);
+      sregisters[reg] = NULL;
+      break;
     default: break;
   }
 }
