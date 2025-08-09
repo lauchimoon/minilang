@@ -11,6 +11,9 @@ typedef enum {
   OPCODE_PRNT,
   OPCODE_PRNTL,
   OPCODE_ADD,
+  OPCODE_SUB,
+  OPCODE_MUL,
+  OPCODE_DIV,
 } Opcode;
 
 typedef enum {
@@ -52,7 +55,9 @@ int get_register_index(char *s);
 
 void mov(int target_reg, int reg, char *data);
 void prnt(int target_reg, int reg, int newline);
-void add(int target_reg, int reg_dst, int reg_src);
+void arithm(int target_reg, int reg_dst, int reg_src, int op);
+void iarithm(int reg_dst, int reg_src, int op);
+void farithm(int reg_dst, int reg_src, int op);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -162,6 +167,9 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "prnt")) return OPCODE_PRNT;
   else if (streq(name, "prntl")) return OPCODE_PRNTL;
   else if (streq(name, "add")) return OPCODE_ADD;
+  else if (streq(name, "sub")) return OPCODE_SUB;
+  else if (streq(name, "mul")) return OPCODE_MUL;
+  else if (streq(name, "div")) return OPCODE_DIV;
   else return -1;
 }
 
@@ -185,8 +193,11 @@ int parse_statement(statement stmt)
       prnt(target_reg, reg, newline);
       break;
     case OPCODE_ADD:
+    case OPCODE_SUB:
+    case OPCODE_MUL:
+    case OPCODE_DIV:
       int regsrc = get_register_index(stmt.args[1]);
-      add(target_reg, reg, regsrc);
+      arithm(target_reg, reg, regsrc, opcode);
       break;
     default: break;
   }
@@ -247,14 +258,54 @@ void prnt(int target_reg, int reg, int newline)
   if (newline) printf("\n");
 }
 
-void add(int target_reg, int reg_dst, int reg_src)
+void arithm(int target_reg, int reg_dst, int reg_src, int op)
 {
   switch (target_reg) {
     case 'i':
-      iregisters[reg_dst] = iregisters[reg_dst] + iregisters[reg_src];
+      iarithm(reg_dst, reg_src, op);
       break;
     case 'f':
-      fregisters[reg_dst] = fregisters[reg_dst] + fregisters[reg_src];
+      farithm(reg_dst, reg_src, op);
+      break;
+    default: break;
+  }
+}
+
+void iarithm(int reg_dst, int reg_src, int op)
+{
+  switch (op) {
+    case OPCODE_ADD:
+      iregisters[reg_dst] += iregisters[reg_src];
+      break;
+    case OPCODE_SUB:
+      iregisters[reg_dst] -= iregisters[reg_src];
+      break;
+    case OPCODE_MUL:
+      iregisters[reg_dst] *= iregisters[reg_src];
+      break;
+    case OPCODE_DIV:
+      if (iregisters[reg_src] != 0)
+        iregisters[reg_dst] /= iregisters[reg_src];
+      break;
+    default: break;
+  }
+}
+
+void farithm(int reg_dst, int reg_src, int op)
+{
+  switch (op) {
+    case OPCODE_ADD:
+      fregisters[reg_dst] += fregisters[reg_src];
+      break;
+    case OPCODE_SUB:
+      fregisters[reg_dst] -= fregisters[reg_src];
+      break;
+    case OPCODE_MUL:
+      fregisters[reg_dst] *= fregisters[reg_src];
+      break;
+    case OPCODE_DIV:
+      if (fregisters[reg_src] != 0)
+        fregisters[reg_dst] /= fregisters[reg_src];
       break;
     default: break;
   }

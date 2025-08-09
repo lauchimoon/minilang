@@ -1,7 +1,0 @@
-mov f0 34.1330
-mov f1 35.0007
-add f0 f1
-prnt f0
-
-mov s0 " hehehe"
-prntl s0
