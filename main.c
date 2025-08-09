@@ -14,6 +14,8 @@ typedef enum {
   OPCODE_SUB,
   OPCODE_MUL,
   OPCODE_DIV,
+  OPCODE_INCR,
+  OPCODE_DECR,
 } Opcode;
 
 typedef enum {
@@ -58,6 +60,7 @@ void prnt(int target_reg, int reg, int newline);
 void arithm(int target_reg, int reg_dst, int reg_src, int op);
 void iarithm(int reg_dst, int reg_src, int op);
 void farithm(int reg_dst, int reg_src, int op);
+void incr(int target_reg, int reg, int sign);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -170,6 +173,8 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "sub")) return OPCODE_SUB;
   else if (streq(name, "mul")) return OPCODE_MUL;
   else if (streq(name, "div")) return OPCODE_DIV;
+  else if (streq(name, "incr")) return OPCODE_INCR;
+  else if (streq(name, "decr")) return OPCODE_DECR;
   else return -1;
 }
 
@@ -192,12 +197,14 @@ int parse_statement(statement stmt)
       int newline = (opcode == OPCODE_PRNTL)? 1 : 0;
       prnt(target_reg, reg, newline);
       break;
-    case OPCODE_ADD:
-    case OPCODE_SUB:
-    case OPCODE_MUL:
-    case OPCODE_DIV:
+    case OPCODE_ADD: case OPCODE_SUB:
+    case OPCODE_MUL: case OPCODE_DIV:
       int regsrc = get_register_index(stmt.args[1]);
       arithm(target_reg, reg, regsrc, opcode);
+      break;
+    case OPCODE_INCR:
+    case OPCODE_DECR:
+      incr(target_reg, reg, (opcode == OPCODE_INCR)? 1 : -1);
       break;
     default: break;
   }
@@ -287,6 +294,8 @@ void iarithm(int reg_dst, int reg_src, int op)
       if (iregisters[reg_src] != 0)
         iregisters[reg_dst] /= iregisters[reg_src];
       break;
+    case OPCODE_INCR:
+      ++iregisters[reg_dst];
     default: break;
   }
 }
@@ -307,6 +316,15 @@ void farithm(int reg_dst, int reg_src, int op)
       if (fregisters[reg_src] != 0)
         fregisters[reg_dst] /= fregisters[reg_src];
       break;
+    default: break;
+  }
+}
+
+void incr(int target_reg, int reg, int sign)
+{
+  switch (target_reg) {
+    case 'i': iregisters[reg] += sign; break;
+    case 'f': fregisters[reg] += sign; break;
     default: break;
   }
 }
