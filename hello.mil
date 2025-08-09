@@ -1,2 +1,2 @@
-mov s0 "hola mundo"
+mov s0 "Hello world"
 prntl s0

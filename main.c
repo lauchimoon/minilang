@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#define PROGRAM_NAME "minilang"
 #define streq(a, b) (strcmp((a), (b)) == 0)
 
 typedef enum {
@@ -10,6 +11,13 @@ typedef enum {
   OPCODE_PRNT,
   OPCODE_PRNTL,
 } Opcode;
+
+typedef enum {
+  ERROR_NONE = 0,
+  ERROR_INVALID_REGISTER_TYPE,
+  ERROR_INVALID_REGISTER_NUMBER,
+  ERROR_INVALID_OPERATION,
+} Error;
 
 #define MAX_REGISTERS 256
 #define MAX_ARGS        6
@@ -47,6 +55,8 @@ void sl_free(statementlist sl);
 statementlist sl_append(statementlist sl, statement stmt);
 void parse_statements(statementlist sl);
 
+void fail(Error code);
+
 static statementnode *new_node(statement stmt, statementnode *next);
 
 int main()
@@ -54,7 +64,7 @@ int main()
   char *filename = "hello.mil";
   FILE *f = fopen(filename, "r");
   if (!f) {
-    printf("file '%s' doesn't exist\n", filename);
+    printf("%s: file '%s' doesn't exist\n", PROGRAM_NAME, filename);
     return 1;
   }
 
@@ -64,7 +74,12 @@ int main()
     line[strcspn(line, "\n")] = '\0';
 
     statement stmt = {};
-    stmt_make_from_str(&stmt, line);
+    int ret = stmt_make_from_str(&stmt, line);
+    if (ret != ERROR_NONE) {
+      fail(ret);
+      return 1;
+    }
+
     sl = sl_append(sl, stmt);
   }
 
@@ -89,7 +104,7 @@ int stmt_make_from_str(statement *stmt, char *src)
       if (reading_opcode) {
         int opcode = get_opcode_by_name(buffer);
         if (opcode == -1)
-          return -1;
+          return ERROR_INVALID_OPERATION;
 
         stmt->opcode = opcode;
         reading_opcode = 0;
@@ -117,7 +132,7 @@ int stmt_make_from_str(statement *stmt, char *src)
     buffer[buffer_idx++] = src[i];
   }
 
-  return 0;
+  return ERROR_NONE;
 }
 
 void write_arg(char **arg, char *buffer, int *buffer_idx)
@@ -143,11 +158,11 @@ int parse_statement(statement stmt)
   int opcode = stmt.opcode;
   int target_reg = get_register(stmt.args[0]);
   if (target_reg == -1)
-    return -1;
+    return ERROR_INVALID_REGISTER_TYPE;
 
   int reg = get_register_index(stmt.args[0]);
   if (reg == -1)
-    return -1;
+    return ERROR_INVALID_REGISTER_NUMBER;
 
   switch (opcode) {
     case OPCODE_MOV:
@@ -235,11 +250,29 @@ statementlist sl_append(statementlist sl, statement stmt)
 
 void parse_statements(statementlist sl)
 {
-  for (statementnode *tmp = sl; tmp; tmp = tmp->next)
-    if (parse_statement(tmp->s) < 0) {
-      printf("something went wrong\n");
+  for (statementnode *tmp = sl; tmp; tmp = tmp->next) {
+    int ret = parse_statement(tmp->s);
+    if (ret != ERROR_NONE) {
+      fail(ret);
       return;
     }
+  }
+}
+
+void fail(Error code)
+{
+  switch (code) {
+    case ERROR_INVALID_REGISTER_TYPE:
+      printf("%s: invalid register type (only i, f and s are accepted)\n", PROGRAM_NAME);
+      break;
+    case ERROR_INVALID_REGISTER_NUMBER:
+      printf("%s: invalid register number (must be between 0 and %d)\n", PROGRAM_NAME, MAX_REGISTERS - 1);
+      break;
+    case ERROR_INVALID_OPERATION:
+      printf("%s: unknown operation\n", PROGRAM_NAME);
+      break;
+    default: break;
+  }
 }
 
 static statementnode *new_node(statement stmt, statementnode *next)
