@@ -140,20 +140,6 @@ int main(int argc, char **argv)
   return 0;
 }
 
-void printstmt(statement s)
-{
-  switch (s.opcode) {
-    case OPCODE_MOV: printf("mov "); break;
-    case OPCODE_PRNTL: printf("prntl "); break;
-    case OPCODE_CLR: printf("clr "); break;
-    case OPCODE_JMP: printf("jmp "); break;
-    default: break;
-  }
-  for (int i = 0; i < s.nargs; ++i)
-    printf("%s ", s.args[i]);
-  printf("\n");
-}
-
 int get_labels(program *pg, FILE *f)
 {
   label lb = {};
