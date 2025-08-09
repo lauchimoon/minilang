@@ -30,6 +30,7 @@ typedef enum {
   ERROR_MISSING_START,
   ERROR_DIV_ZERO,
   ERROR_UNKNOWN_LABEL,
+  ERROR_DIFFERENT_REGISTER_TYPE,
 } Error;
 
 #define MAX_REGISTERS 256
@@ -77,6 +78,7 @@ int is_valid_register(char c);
 int get_register_index(char *s);
 
 void mov(int target_reg, int reg, char *data);
+void mov_register(int target_reg, int reg, int reg2);
 void prnt(int target_reg, int reg, int newline);
 int arithm(int target_reg, int reg_dst, int reg_src, int op);
 int iarithm(int reg_dst, int reg_src, int op);
@@ -129,8 +131,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  parse_statements(pg.labels[1]);
-  //interpret(&pg);
+  interpret(&pg);
 
   fclose(f);
   pg_deinit(&pg);
@@ -278,8 +279,25 @@ int parse_statement(statement stmt)
   }
 
   switch (opcode) {
-    case OPCODE_MOV:
-      mov(target_reg, reg, stmt.args[1]);
+    case OPCODE_MOV: {
+      char *arg = stmt.args[1];
+
+      // Check if arg is a register
+      int target_reg2 = get_register(arg);
+      if (target_reg2 == -1) {
+        mov(target_reg, reg, arg);
+        break;
+      }
+
+      int reg2 = get_register_index(arg);
+      if (reg2 == -1)
+        return ERROR_INVALID_REGISTER_NUMBER;
+
+      if (target_reg != target_reg2)
+        return ERROR_DIFFERENT_REGISTER_TYPE;
+
+      mov_register(target_reg, reg, reg2);
+    }
       break;
     case OPCODE_PRNT: case OPCODE_PRNTL: {
       int newline = (opcode == OPCODE_PRNTL)? 1 : 0;
@@ -353,11 +371,18 @@ void mov(int target_reg, int reg, char *data)
       double f = atof(data);
       fregisters[reg] = f;
       break;
-    case 's':
-      int datasize = strlen(data);
-      sregisters[reg] = malloc(sizeof(char)*(datasize + 1));
-      strcpy(sregisters[reg], data);
-      break;
+    case 's': sregisters[reg] = strdup(data); break;
+    default: break;
+  }
+}
+
+void mov_register(int target_reg, int reg, int reg2)
+{
+  switch (target_reg) {
+    case 'i': iregisters[reg] = iregisters[reg2]; break;
+    case 'f': fregisters[reg] = fregisters[reg2]; break;
+    case 's': sregisters[reg] = strdup(sregisters[reg2]); break;
+    default: break;
   }
 }
 
@@ -373,6 +398,7 @@ void prnt(int target_reg, int reg, int newline)
     case 's':
       printf("%s", sregisters[reg]);
       break;
+    default: break;
   }
 
   if (newline) printf("\n");
@@ -559,6 +585,9 @@ void fail(Error code)
       break;
     case ERROR_UNKNOWN_LABEL:
       printf("%s: unknown label\n", PROGRAM_NAME);
+      break;
+    case ERROR_DIFFERENT_REGISTER_TYPE:
+      printf("%s: tried to move registers of different type\n", PROGRAM_NAME);
       break;
     default: break;
   }
