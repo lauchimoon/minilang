@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -17,6 +18,7 @@ typedef enum {
   OPCODE_INCR,
   OPCODE_DECR,
   OPCODE_CLR,
+  OPCODE_JMP,
 } Opcode;
 
 typedef enum {
@@ -26,6 +28,7 @@ typedef enum {
   ERROR_INVALID_OPERATION,
   ERROR_MISSING_START,
   ERROR_DIV_ZERO,
+  ERROR_UNKNOWN_LABEL,
 } Error;
 
 #define MAX_REGISTERS 256
@@ -79,6 +82,7 @@ int iarithm(int reg_dst, int reg_src, int op);
 int farithm(int reg_dst, int reg_src, int op);
 void incr(int target_reg, int reg, int sign);
 void clear(int target_reg, int reg);
+void jmp(program *pg, int labelidx);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -99,6 +103,8 @@ static statementnode *new_node(statement stmt, statementnode *next);
 static int is_empty(char *s);
 static void clear_registers(void);
 
+program pg;
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -113,7 +119,6 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  program pg;
   pg_init(&pg, INIT_PROGRAM_CAPACITY);
 
   int ret = get_labels(&pg, f);
@@ -122,13 +127,28 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  interpret(&pg);
+  parse_statements(pg.labels[1]);
+  //interpret(&pg);
 
   fclose(f);
   pg_deinit(&pg);
   clear_registers();
 
   return 0;
+}
+
+void printstmt(statement s)
+{
+  switch (s.opcode) {
+    case OPCODE_MOV: printf("mov "); break;
+    case OPCODE_PRNTL: printf("prntl "); break;
+    case OPCODE_CLR: printf("clr "); break;
+    case OPCODE_JMP: printf("jmp "); break;
+    default: break;
+  }
+  for (int i = 0; i < s.nargs; ++i)
+    printf("%s ", s.args[i]);
+  printf("\n");
 }
 
 int get_labels(program *pg, FILE *f)
@@ -146,11 +166,13 @@ int get_labels(program *pg, FILE *f)
     if (streq(line, "end")) {
       lb = make_label(lb.name, sl);
       pg_append_label(pg, lb);
+      sl = sl_make();
       continue;
     }
 
-    if (strchr(line, ':'))
-      lb.name = strndup(line, strlen(line) - 1);
+    int linesize = strlen(line);
+    if (line[linesize - 1] == ':')
+      lb.name = strndup(line, linesize - 1);
     else {
       statement stmt = {};
 
@@ -233,19 +255,24 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "incr")) return OPCODE_INCR;
   else if (streq(name, "decr")) return OPCODE_DECR;
   else if (streq(name, "clr")) return OPCODE_CLR;
+  else if (streq(name, "jmp")) return OPCODE_JMP;
   else return -1;
 }
 
 int parse_statement(statement stmt)
 {
   int opcode = stmt.opcode;
-  int target_reg = get_register(stmt.args[0]);
-  if (target_reg == -1)
-    return ERROR_INVALID_REGISTER_TYPE;
+  int target_reg, reg;
 
-  int reg = get_register_index(stmt.args[0]);
-  if (reg == -1)
-    return ERROR_INVALID_REGISTER_NUMBER;
+  if (opcode != OPCODE_JMP) {
+    target_reg = get_register(stmt.args[0]);
+    if (target_reg == -1)
+      return ERROR_INVALID_REGISTER_TYPE;
+
+    reg = get_register_index(stmt.args[0]);
+    if (reg == -1)
+      return ERROR_INVALID_REGISTER_NUMBER;
+  }
 
   switch (opcode) {
     case OPCODE_MOV:
@@ -268,6 +295,14 @@ int parse_statement(statement stmt)
       break;
     case OPCODE_CLR:
       clear(target_reg, reg);
+      break;
+    case OPCODE_JMP:
+      char *labelname = stmt.args[0];
+      int labelidx = find_label(&pg, labelname);
+      if (labelidx == -1)
+        return ERROR_UNKNOWN_LABEL;
+
+      jmp(&pg, labelidx);
       break;
     default: break;
   }
@@ -412,6 +447,12 @@ void clear(int target_reg, int reg)
   }
 }
 
+void jmp(program *pg, int labelidx)
+{
+  label lb = pg->labels[labelidx];
+  parse_statements(lb);
+}
+
 statementlist sl_make(void)
 {
   return NULL;
@@ -490,6 +531,9 @@ void fail(Error code)
       break;
     case ERROR_MISSING_START:
       printf("%s: 'start' label not found\n", PROGRAM_NAME);
+      break;
+    case ERROR_UNKNOWN_LABEL:
+      printf("%s: unknown label\n", PROGRAM_NAME);
       break;
     default: break;
   }

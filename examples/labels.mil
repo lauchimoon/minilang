@@ -1,0 +1,13 @@
+label:
+  mov s0 "hello from label!"
+  prntl s0
+  clr s0
+end
+
+start:
+  mov s1 "moving to label"
+  prntl s1
+  jmp label
+  mov s0 "that was label"
+  prntl s0
+end
