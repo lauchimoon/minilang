@@ -24,6 +24,7 @@ typedef enum {
   ERROR_INVALID_REGISTER_TYPE,
   ERROR_INVALID_REGISTER_NUMBER,
   ERROR_INVALID_OPERATION,
+  ERROR_MISSING_START,
   ERROR_DIV_ZERO,
 } Error;
 
@@ -34,6 +35,7 @@ double fregisters[MAX_REGISTERS] = {};
 char  *sregisters[MAX_REGISTERS] = {};
 
 #define BUFFER_SIZE 1024
+#define INIT_PROGRAM_CAPACITY 256
 
 typedef struct statement {
   Opcode opcode;
@@ -48,6 +50,17 @@ typedef struct statementnode {
 
 typedef statementnode *statementlist;
 
+typedef struct label {
+  char *name;
+  statementlist statements;
+} label;
+
+typedef struct program {
+  label *labels;
+  unsigned cap;
+  unsigned len;
+} program;
+
 int stmt_make_from_str(statement *stmt, char *src);
 Opcode get_opcode_by_name(char *name);
 void write_arg(char **arg, char *buffer, int *buffer_idx);
@@ -59,9 +72,9 @@ int get_register_index(char *s);
 
 void mov(int target_reg, int reg, char *data);
 void prnt(int target_reg, int reg, int newline);
-void arithm(int target_reg, int reg_dst, int reg_src, int op);
-void iarithm(int reg_dst, int reg_src, int op);
-void farithm(int reg_dst, int reg_src, int op);
+int arithm(int target_reg, int reg_dst, int reg_src, int op);
+int iarithm(int reg_dst, int reg_src, int op);
+int farithm(int reg_dst, int reg_src, int op);
 void incr(int target_reg, int reg, int sign);
 void clear(int target_reg, int reg);
 
@@ -69,9 +82,16 @@ statementlist sl_make(void);
 void sl_free(statementlist sl);
 statementlist sl_make_from_file(FILE *f);
 statementlist sl_append(statementlist sl, statement stmt);
-void parse_statements(statementlist sl);
-
+void parse_statements(label lb);
 void fail(Error code);
+
+label make_label(char *name, statementlist statements);
+
+void pg_init(program *pg, unsigned cap);
+void pg_deinit(program *pg);
+void pg_append_label(program *pg, label lb);
+void interpret(program *pg);
+int find_label(program *pg, char *name);
 
 static statementnode *new_node(statement stmt, statementnode *next);
 static int is_empty(char *s);
@@ -90,10 +110,16 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  statementlist sl = sl_make_from_file(f);
-  parse_statements(sl);
+  program pg;
+  pg_init(&pg, INIT_PROGRAM_CAPACITY);
 
-  sl_free(sl);
+  statementlist sl = sl_make_from_file(f);
+  label startlabel = make_label("start", sl);
+  pg_append_label(&pg, startlabel);
+
+  interpret(&pg);
+
+  pg_deinit(&pg);
   return 0;
 }
 
@@ -189,7 +215,9 @@ int parse_statement(statement stmt)
     case OPCODE_ADD: case OPCODE_SUB:
     case OPCODE_MUL: case OPCODE_DIV:
       int regsrc = get_register_index(stmt.args[1]);
-      arithm(target_reg, reg, regsrc, opcode);
+      int ret = arithm(target_reg, reg, regsrc, opcode);
+      if (ret != ERROR_NONE)
+        return ret;
       break;
     case OPCODE_INCR:
     case OPCODE_DECR:
@@ -201,7 +229,7 @@ int parse_statement(statement stmt)
     default: break;
   }
 
-  return 0;
+  return ERROR_NONE;
 }
 
 char get_register(char *s)
@@ -257,20 +285,23 @@ void prnt(int target_reg, int reg, int newline)
   if (newline) printf("\n");
 }
 
-void arithm(int target_reg, int reg_dst, int reg_src, int op)
+int arithm(int target_reg, int reg_dst, int reg_src, int op)
 {
+  int ret = ERROR_NONE;
   switch (target_reg) {
     case 'i':
-      iarithm(reg_dst, reg_src, op);
+      ret = iarithm(reg_dst, reg_src, op);
       break;
     case 'f':
-      farithm(reg_dst, reg_src, op);
+      ret = farithm(reg_dst, reg_src, op);
       break;
     default: break;
   }
+
+  return ret;
 }
 
-void iarithm(int reg_dst, int reg_src, int op)
+int iarithm(int reg_dst, int reg_src, int op)
 {
   switch (op) {
     case OPCODE_ADD:
@@ -283,17 +314,17 @@ void iarithm(int reg_dst, int reg_src, int op)
       iregisters[reg_dst] *= iregisters[reg_src];
       break;
     case OPCODE_DIV:
-      if (iregisters[reg_src] == 0) {
-        fail(ERROR_DIV_ZERO);
-        return;
-      }
+      if (iregisters[reg_src] == 0)
+        return ERROR_DIV_ZERO;
       iregisters[reg_dst] /= iregisters[reg_src];
       break;
     default: break;
   }
+
+  return ERROR_NONE;
 }
 
-void farithm(int reg_dst, int reg_src, int op)
+int farithm(int reg_dst, int reg_src, int op)
 {
   switch (op) {
     case OPCODE_ADD:
@@ -306,14 +337,14 @@ void farithm(int reg_dst, int reg_src, int op)
       fregisters[reg_dst] *= fregisters[reg_src];
       break;
     case OPCODE_DIV:
-      if (fregisters[reg_src] == 0) {
-        fail(ERROR_DIV_ZERO);
-        return;
-      }
+      if (fregisters[reg_src] == 0)
+        return ERROR_DIV_ZERO;
       fregisters[reg_dst] /= fregisters[reg_src];
       break;
     default: break;
   }
+
+  return ERROR_NONE;
 }
 
 void incr(int target_reg, int reg, int sign)
@@ -388,9 +419,9 @@ statementlist sl_append(statementlist sl, statement stmt)
   return sl;
 }
 
-void parse_statements(statementlist sl)
+void parse_statements(label lb)
 {
-  for (statementnode *tmp = sl; tmp; tmp = tmp->next) {
+  for (statementnode *tmp = lb.statements; tmp; tmp = tmp->next) {
     int ret = parse_statement(tmp->s);
     if (ret != ERROR_NONE) {
       fail(ret);
@@ -411,8 +442,69 @@ void fail(Error code)
     case ERROR_INVALID_OPERATION:
       printf("%s: unknown operation\n", PROGRAM_NAME);
       break;
+    case ERROR_DIV_ZERO:
+      printf("%s: division by zero\n", PROGRAM_NAME);
+      break;
+    case ERROR_MISSING_START:
+      printf("%s: 'start' label not found\n", PROGRAM_NAME);
+      break;
     default: break;
   }
+}
+
+label make_label(char *name, statementlist statements)
+{
+  return (label){ name, statements };
+}
+
+void pg_init(program *pg, unsigned cap)
+{
+  pg->labels = calloc(cap, sizeof(label));
+  pg->cap = cap;
+  pg->len = 0;
+}
+
+void pg_deinit(program *pg)
+{
+  for (int i = 0; i < pg->cap; ++i)
+    sl_free(pg->labels[i].statements);
+
+  free(pg->labels);
+  pg->cap = pg->len = 0;
+}
+
+void pg_append_label(program *pg, label lb)
+{
+  if (pg->cap <= 0)
+    return;
+
+  if (pg->len + 1 >= pg->cap/2) {
+    pg->cap *= 2;
+    pg->labels = realloc(pg->labels, sizeof(label)*pg->cap);
+  }
+
+  pg->labels[pg->len++] = lb;
+}
+
+void interpret(program *pg)
+{
+  // index 0 should be start
+  int start_exists = find_label(pg, "start");
+  if (!start_exists) {
+    fail(ERROR_MISSING_START);
+    return;
+  }
+
+  parse_statements(pg->labels[0]);
+}
+
+int find_label(program *pg, char *name)
+{
+  for (int i = 0; i < pg->cap; ++i)
+    if (pg->labels[i].name && streq(pg->labels[i].name, name))
+      return 1;
+
+  return 0;
 }
 
 static statementnode *new_node(statement stmt, statementnode *next)
