@@ -1,5 +1,7 @@
-mov s0 "Hello world"
-prntl s0
+start:
+  mov s0 "Hello world"
+  prntl s0
 
-clr s0
-prntl s0
+  clr s0
+  prntl s0
+end

@@ -61,6 +61,8 @@ typedef struct program {
   unsigned len;
 } program;
 
+int get_labels(program *pg, FILE *f);
+
 int stmt_make_from_str(statement *stmt, char *src);
 Opcode get_opcode_by_name(char *name);
 void write_arg(char **arg, char *buffer, int *buffer_idx);
@@ -95,6 +97,7 @@ int find_label(program *pg, char *name);
 
 static statementnode *new_node(statement stmt, statementnode *next);
 static int is_empty(char *s);
+static void clear_registers(void);
 
 int main(int argc, char **argv)
 {
@@ -113,14 +116,54 @@ int main(int argc, char **argv)
   program pg;
   pg_init(&pg, INIT_PROGRAM_CAPACITY);
 
-  statementlist sl = sl_make_from_file(f);
-  label startlabel = make_label("start", sl);
-  pg_append_label(&pg, startlabel);
+  int ret = get_labels(&pg, f);
+  if (ret != ERROR_NONE) {
+    fail(ret);
+    return 1;
+  }
 
   interpret(&pg);
 
+  fclose(f);
   pg_deinit(&pg);
+  clear_registers();
+
   return 0;
+}
+
+int get_labels(program *pg, FILE *f)
+{
+  label lb = {};
+  statementlist sl = sl_make();
+
+  char line[BUFFER_SIZE] = { 0 };
+
+  while (fgets(line, BUFFER_SIZE, f) != NULL) {
+    line[strcspn(line, "\n")] = '\0';
+    if (is_empty(line))
+      continue;
+
+    if (streq(line, "end")) {
+      lb = make_label(lb.name, sl);
+      pg_append_label(pg, lb);
+      continue;
+    }
+
+    if (strchr(line, ':'))
+      lb.name = strndup(line, strlen(line) - 1);
+    else {
+      statement stmt = {};
+
+      // TODO: fix this dumb hack
+      int ret = stmt_make_from_str(&stmt, line + 2);
+      if (ret != ERROR_NONE)
+        return ret;
+
+      sl = sl_append(sl, stmt);
+    }
+  }
+
+  return ERROR_NONE;
 }
 
 int stmt_make_from_str(statement *stmt, char *src)
@@ -466,8 +509,10 @@ void pg_init(program *pg, unsigned cap)
 
 void pg_deinit(program *pg)
 {
-  for (int i = 0; i < pg->cap; ++i)
+  for (int i = 0; i < pg->cap; ++i) {
     sl_free(pg->labels[i].statements);
+    free(pg->labels[i].name);
+  }
 
   free(pg->labels);
   pg->cap = pg->len = 0;
@@ -488,23 +533,22 @@ void pg_append_label(program *pg, label lb)
 
 void interpret(program *pg)
 {
-  // index 0 should be start
-  int start_exists = find_label(pg, "start");
-  if (!start_exists) {
+  int start_idx = find_label(pg, "start");
+  if (start_idx == -1) {
     fail(ERROR_MISSING_START);
     return;
   }
 
-  parse_statements(pg->labels[0]);
+  parse_statements(pg->labels[start_idx]);
 }
 
 int find_label(program *pg, char *name)
 {
   for (int i = 0; i < pg->cap; ++i)
     if (pg->labels[i].name && streq(pg->labels[i].name, name))
-      return 1;
+      return i;
 
-  return 0;
+  return -1;
 }
 
 static statementnode *new_node(statement stmt, statementnode *next)
@@ -521,4 +565,12 @@ static int is_empty(char *s)
       return 0;
 
   return 1;
+}
+
+static void clear_registers(void)
+{
+  for (int i = 0; i < MAX_REGISTERS; ++i) {
+    free(sregisters[i]);
+    iregisters[i] = 0; fregisters[i] = 0.0;
+  }
 }

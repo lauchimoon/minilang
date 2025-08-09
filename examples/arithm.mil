@@ -1,22 +1,24 @@
-mov i0 34
-mov i1 2
-prntl i0
-div i0 i1
-prntl i0
+start:
+  mov i0 34
+  mov i1 2
+  prntl i0
+  div i0 i1
+  prntl i0
 
-mov f0 6.9
-mov f1 0.2
-mul f0 f1
-prntl f0
+  mov f0 6.9
+  mov f1 0.2
+  mul f0 f1
+  prntl f0
 
-mov i0 71
-sub i0 i1
-prntl i0
+  mov i0 71
+  sub i0 i1
+  prntl i0
 
-mov i0 67
-add i0 i1
-prntl i0
+  mov i0 67
+  add i0 i1
+  prntl i0
 
-mov i0 68
-incr i0
-prntl i0
+  mov i0 68
+  incr i0
+  prntl i0
+end
