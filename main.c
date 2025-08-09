@@ -12,6 +12,7 @@ typedef enum {
   OPCODE_PRNT,
   OPCODE_PRNTL,
   OPCODE_ADD,
+  OPCODE_ADD2,
   OPCODE_SUB,
   OPCODE_MUL,
   OPCODE_DIV,
@@ -35,7 +36,7 @@ typedef enum {
 
 #define MAX_REGISTERS 256
 #define MAX_ARGS        6
-int    iregisters[MAX_REGISTERS] = {};
+int    iregisters[MAX_REGISTERS] = { 0 };
 double fregisters[MAX_REGISTERS] = {};
 char  *sregisters[MAX_REGISTERS] = {};
 
@@ -83,6 +84,7 @@ void prnt(int target_reg, int reg, int newline);
 int arithm(int target_reg, int reg_dst, int reg_src, int op);
 int iarithm(int reg_dst, int reg_src, int op);
 int farithm(int reg_dst, int reg_src, int op);
+void add2(int target_reg, int reg, int reg1, int reg2);
 void incr(int target_reg, int reg, int sign);
 void clear(int target_reg, int reg);
 void jmp(program *pg, int labelidx);
@@ -238,6 +240,7 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "prnt")) return OPCODE_PRNT;
   else if (streq(name, "prntl")) return OPCODE_PRNTL;
   else if (streq(name, "add")) return OPCODE_ADD;
+  else if (streq(name, "add2")) return OPCODE_ADD2;
   else if (streq(name, "sub")) return OPCODE_SUB;
   else if (streq(name, "mul")) return OPCODE_MUL;
   else if (streq(name, "div")) return OPCODE_DIV;
@@ -296,6 +299,12 @@ int parse_statement(statement stmt)
       int ret = arithm(target_reg, reg, regsrc, opcode);
       if (ret != ERROR_NONE)
         return ret;
+    }
+      break;
+    case OPCODE_ADD2: {
+      int reg1 = get_register_index(stmt.args[1]);
+      int reg2 = get_register_index(stmt.args[2]);
+      add2(target_reg, reg, reg1, reg2);
     }
       break;
     case OPCODE_INCR:
@@ -450,6 +459,15 @@ int farithm(int reg_dst, int reg_src, int op)
   }
 
   return ERROR_NONE;
+}
+
+void add2(int target_reg, int reg, int reg1, int reg2)
+{
+  switch (target_reg) {
+    case 'i': iregisters[reg] = iregisters[reg1] + iregisters[reg2]; break;
+    case 'f': fregisters[reg] = fregisters[reg1] + fregisters[reg2]; break;
+    default: break;
+  }
 }
 
 void incr(int target_reg, int reg, int sign)
