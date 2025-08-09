@@ -1,7 +1,0 @@
-start:
-  mov i0 1
-  mov i1 i0
-  incr i1
-  prntl i0
-  prntl i1
-end
