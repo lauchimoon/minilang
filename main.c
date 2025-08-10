@@ -1,8 +1,8 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <math.h>
 
 #define PROGRAM_NAME "minilang"
 #define streq(a, b) (strcmp((a), (b)) == 0)
@@ -16,11 +16,13 @@ typedef enum {
   OPCODE_SUB,
   OPCODE_MUL,
   OPCODE_DIV,
+  OPCODE_MOD,
   OPCODE_INCR,
   OPCODE_DECR,
   OPCODE_CLR,
   OPCODE_JMP,
   OPCODE_JMPNZ,
+  OPCODE_JMPZ,
 } Opcode;
 
 typedef enum {
@@ -88,7 +90,7 @@ void add2(int target_reg, int reg, int reg1, int reg2);
 void incr(int target_reg, int reg, int sign);
 void clear(int target_reg, int reg);
 void jmp(program *pg, int labelidx);
-void jmpnz(program *pg, int target_reg, int reg, int labelidx);
+void jmp_cond(program *pg, int target_reg, int reg, int labelidx, int notzero);
 
 statementlist sl_make(void);
 void sl_free(statementlist sl);
@@ -244,11 +246,13 @@ Opcode get_opcode_by_name(char *name)
   else if (streq(name, "sub")) return OPCODE_SUB;
   else if (streq(name, "mul")) return OPCODE_MUL;
   else if (streq(name, "div")) return OPCODE_DIV;
+  else if (streq(name, "mod")) return OPCODE_MOD;
   else if (streq(name, "incr")) return OPCODE_INCR;
   else if (streq(name, "decr")) return OPCODE_DECR;
   else if (streq(name, "clr")) return OPCODE_CLR;
   else if (streq(name, "jmp")) return OPCODE_JMP;
   else if (streq(name, "jmpnz")) return OPCODE_JMPNZ;
+  else if (streq(name, "jmpz")) return OPCODE_JMPZ;
   else return -1;
 }
 
@@ -294,7 +298,8 @@ int parse_statement(statement stmt)
     }
       break;
     case OPCODE_ADD: case OPCODE_SUB:
-    case OPCODE_MUL: case OPCODE_DIV: {
+    case OPCODE_MUL: case OPCODE_DIV: 
+    case OPCODE_MOD: {
       int regsrc = get_register_index(stmt.args[1]);
       int ret = arithm(target_reg, reg, regsrc, opcode);
       if (ret != ERROR_NONE)
@@ -323,13 +328,14 @@ int parse_statement(statement stmt)
       jmp(&pg, labelidx);
     }
       break;
-    case OPCODE_JMPNZ: {
+    case OPCODE_JMPNZ: case OPCODE_JMPZ: {
       char *labelname = stmt.args[1];
       int labelidx = find_label(&pg, labelname);
       if (labelidx == -1)
         return ERROR_UNKNOWN_LABEL;
 
-      jmpnz(&pg, target_reg, reg, labelidx);
+      int notzero = (opcode == OPCODE_JMPNZ)? 1 : 0;
+      jmp_cond(&pg, target_reg, reg, labelidx, notzero);
     }
       break;
     default: break;
@@ -432,6 +438,12 @@ int iarithm(int reg_dst, int reg_src, int op)
         return ERROR_DIV_ZERO;
       iregisters[reg_dst] /= iregisters[reg_src];
       break;
+    case OPCODE_MOD:
+      if (iregisters[reg_src] == 0)
+        return ERROR_DIV_ZERO;
+      iregisters[reg_dst] %= iregisters[reg_src];
+      break;
+
     default: break;
   }
 
@@ -454,6 +466,11 @@ int farithm(int reg_dst, int reg_src, int op)
       if (fregisters[reg_src] == 0)
         return ERROR_DIV_ZERO;
       fregisters[reg_dst] /= fregisters[reg_src];
+      break;
+    case OPCODE_MOD:
+      if (fregisters[reg_src] == 0)
+        return ERROR_DIV_ZERO;
+      fregisters[reg_dst] = fmod(fregisters[reg_dst], fregisters[reg_src]);
       break;
     default: break;
   }
@@ -498,12 +515,13 @@ void jmp(program *pg, int labelidx)
   parse_statements(lb);
 }
 
-void jmpnz(program *pg, int target_reg, int reg, int labelidx)
+void jmp_cond(program *pg, int target_reg, int reg, int labelidx, int notzero)
 {
+#define jmpcond_condition(regs) (notzero? regs[reg] != 0 : regs[reg] == 0)
   switch (target_reg) {
-    case 'i': if (iregisters[reg] != 0) jmp(pg, labelidx); break;
-    case 'f': if (fregisters[reg] != 0) jmp(pg, labelidx); break;
-    case 's': if (sregisters[reg]) jmp(pg, labelidx); break;
+    case 'i': if (jmpcond_condition(iregisters)) jmp(pg, labelidx);; break;
+    case 'f': if (jmpcond_condition(fregisters)) jmp(pg, labelidx); break;
+    case 's': if (jmpcond_condition(sregisters)) jmp(pg, labelidx); break;
     default: break;
   }
 }

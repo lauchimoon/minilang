@@ -1,0 +1,26 @@
+even:
+  mov s0 " is even"
+  prnt i0
+  prntl s0
+
+  clr s0
+end
+
+odd:
+  mov s0 " is odd"
+  prnt i0
+  prntl s0
+
+  clr s0
+end
+
+start:
+  mov i0 4
+  mov i1 2
+
+  mov i2 i0
+  mod i2 i1
+
+  jmpz i2 even
+  jmpnz i2 odd
+end
